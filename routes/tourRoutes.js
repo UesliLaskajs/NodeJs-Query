@@ -3,8 +3,11 @@ const tours = require("../controllers/tours.controllers");
 
 const Router = express.Router();
 
+Router.route("/top-5-cheaps")
+    .get(tours.aliasing, tours.getAllTours)
+
 Router.route("/")
-    .get(tours.getAllTours)
+    .get(tours.getAllTours, tours.aliasing)
     .post(tours.createTour);
 
 Router.route("/:id")

@@ -84,6 +84,12 @@ module.exports.getAllTours = async (req, res) => {
     }
 };
 
+module.exports.aliasing=(req,res,next)=>{
+    req.query.limit="5"
+    req.query.sort="price"
+    req.query.fields="-createdAt -price"
+    next();
+}
 
 module.exports.getTour = async (req, res) => {
     try {
