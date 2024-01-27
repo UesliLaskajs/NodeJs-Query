@@ -1,52 +1,70 @@
+
 const Tour = require("../model/tours.model");
+
 
 module.exports.getAllTours = async (req, res) => {
     try {
-        // Filtering
-        const queryObj = { ...req.query };
-        // const excludeQueries = ["limit", "sort", "page", "fields"];
-        // excludeQueries.forEach(el => delete queryObj[el]);
+        class ApiFeature {
+            constructor(query, queryStr) {
+                this.query = query;
+                this.queryStr = queryStr;
+            }
 
-        // Advance Filter
-        let queryStr = JSON.stringify(queryObj);
-        queryStr = queryStr.replace(/\b(gte|lt|gt|lte)\b/g, match => `$${match}`);
-        let parsedData = JSON.parse(queryStr);
+            filter() {
+                // Filtering
+                const queryObj = { ...this.queryStr };
+                const excludeQueries = ["limit", "sort", "page", "fields"];
+                excludeQueries.forEach((el) => delete queryObj[el]);
 
-        // MongoDB Query
-        let query = Tour.find(parsedData);
+                // Advanced Filter
+                let queryString = JSON.stringify(queryObj);
+                queryString = queryString.replace(/\b(gte|lt|gt|lte)\b/g, (match) => `$${match}`);
+                const parsedData = JSON.parse(queryString);
 
-        // Sorting
-        if (req.query.sort) {
-            query = query.sort(req.query.sort);
-        } else {
-            query = query.sort("-createdAt");
-        }
-        //Fields
+                this.query = this.query.find(parsedData); // Update this line
+                return this; // Add this line to enable method chaining
+            }
 
-        if (req.query.fields) {
-            let fields = req.query.fields.split(",").join(" ");
-            query = query.select(fields);
-        } else {
-            query = query.select("-createdAt -price");
-        }
+            sort() {
+                if (this.queryStr.sort) {
+                    this.query = this.query.sort(this.queryStr.sort); // Update this line
+                } else {
+                    this.query = this.query.sort("-createdAt");
+                }
+                return this;
+            }
 
-        //Pagination
+            field() {
+                // Fields
+                if (this.queryStr.fields) {
+                    const fields = this.queryStr.fields.split(',').join(' ');
+                    this.query = this.query.select(fields); // Update this line
+                } else {
+                    this.query = this.query.select("-createdAt -price");
+                }
+                return this;
+            }
 
-        const page=req.query.page * 1 || 1;
-        const limit=req.query.limit * 1 || 100;
-        const skip=(page - 1) * limit;
+            paginate() {
+                // Pagination
+                const page = this.queryStr.page * 1 || 1;
+                const limit = this.queryStr.limit * 1 || 100;
+                const skip = (page - 1) * limit;
 
-        if(req.query.page){
-            numOfPage=await Tour.countDocuments();
-            if(numOfPage >=skip){
-                throw new Error("Error Num of Pages is greater than skip")
+                this.query = this.query.skip(skip).limit(limit); // Update this line
+                return this;
             }
         }
-        query=query.skip(skip).limit(limit)
-        // Execute the query
-        const tours = await query;
 
-        // Sending a JSON response with the fetched tours
+        const feature = new ApiFeature(Tour.find(), req.query)
+            .filter()
+            .sort()
+            .field()
+            .paginate();
+
+        const tours = await feature.query;
+
+        // Send the tours as a response
         res.status(200).json({
             status: 'success',
             results: tours.length,
@@ -54,40 +72,19 @@ module.exports.getAllTours = async (req, res) => {
                 tours,
             },
         });
-    } catch (err) {
-        // Handling errors and sending an error response
-        console.error(err);
-
-        // Check if the error is circular before sending it in the response
-        let errorResponse;
-
-        if (err instanceof Error) {
-            errorResponse = {
-                status: 'error',
-                message: 'Server Error',
-                error: {
-                    name: err.name,
-                    message: err.message,
-                    stack: err.stack,
-                },
-            };
-        } else {
-            // If it's not an Error object, convert it to a string
-            errorResponse = {
-                status: 'error',
-                message: 'Server Error',
-                error: err.toString(),
-            };
-        }
-
-        res.status(500).json(errorResponse);
+    } catch (error) {
+        // Handle the error appropriately
+        res.status(500).json({
+            status: 'error',
+            message: error.message,
+        });
     }
 };
 
-module.exports.aliasing=(req,res,next)=>{
-    req.query.limit="5"
-    req.query.sort="price"
-    req.query.fields="-createdAt -price"
+module.exports.aliasing = (req, res, next) => {
+    req.query.limit = "5"
+    req.query.sort = "price"
+    req.query.fields = "-createdAt -price"
     next();
 }
 
